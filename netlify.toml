@@ -1,0 +1,56 @@
+[build]
+  # Base directory - where Netlify will run commands
+  base = "."
+  
+  # Build command - minimal build step
+  command = "echo 'Build complete'"
+  
+  # Publish directory - static files will be served from here
+  publish = "."
+
+[build.environment]
+  # Python version
+  PYTHON_VERSION = "3.9"
+
+# Redirect API calls to serverless function
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/app"
+  status = 200
+
+# Serve static files directly
+[[redirects]]
+  from = "/static/*"
+  to = "/static/:splat"
+  status = 200
+
+# Serve index.html for root
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/app"
+  status = 200
+
+# Functions configuration
+[functions]
+  # Directory for serverless functions
+  directory = "netlify/functions"
+  
+  # Node.js version for functions (if needed)
+  node_bundler = "esbuild"
+
+# Headers for static assets
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+

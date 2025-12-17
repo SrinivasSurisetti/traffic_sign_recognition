@@ -1,0 +1,11 @@
+serverless-wsgi==0.8.2
+flask
+numpy
+opencv-python-headless
+pillow
+tensorflow
+pandas
+scikit-learn
+matplotlib
+werkzeug
+
