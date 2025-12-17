@@ -107,21 +107,39 @@ def favicon():
 @app.route('/predict', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
+        # Validate that a file was actually uploaded
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part in the request'}), 400
+
         f = request.files['file']
+
+        # Some browsers submit an empty part without a filename
+        if f.filename is None or f.filename.strip() == '':
+            return jsonify({'error': 'No file selected for uploading'}), 400
+
         basepath = os.path.dirname(__file__)
         # Ensure uploads directory exists
         uploads_dir = os.path.join(basepath, 'uploads')
         if not os.path.exists(uploads_dir):
             os.makedirs(uploads_dir)
-        file_path = os.path.join(uploads_dir, secure_filename(f.filename))
+
+        # Ensure we always have a valid filename
+        filename = secure_filename(f.filename)
+        if filename == '':
+            # Fallback filename if secure_filename removes everything
+            import time
+            filename = f"upload_{int(time.time())}.png"
+
+        file_path = os.path.join(uploads_dir, filename)
         f.save(file_path)
+
         preds, probability = model_predict(file_path, model)
         result = {
             'prediction': preds,
             'confidence': float(probability)
         }
         return jsonify(result)
-    return None
+    return jsonify({'error': 'Invalid request method'}), 405
 
 
 if __name__ == '__main__':
