@@ -12,12 +12,26 @@ from tensorflow.keras.preprocessing import image
 
 from flask import Flask, redirect, url_for, request, render_template, jsonify
 from werkzeug.utils import secure_filename
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-MODEL_PATH ='model.h5'
+MODEL_PATH = 'model.h5'
 
-model = load_model(MODEL_PATH)
+# Load model with error handling
+try:
+    logger.info(f"Loading model from {MODEL_PATH}...")
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Model file {MODEL_PATH} not found!")
+    model = load_model(MODEL_PATH)
+    logger.info("Model loaded successfully!")
+except Exception as e:
+    logger.error(f"Failed to load model: {str(e)}")
+    model = None
 
 def grayscale(img):
     img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
@@ -96,6 +110,7 @@ def model_predict(img_path, model):
 @app.route('/', methods=['GET'])
 def index():
     # Main page
+    logger.info("Serving index page")
     return render_template('index.html')
 
 @app.route('/favicon.ico')
@@ -107,38 +122,59 @@ def favicon():
 @app.route('/predict', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
-        # Validate that a file was actually uploaded
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part in the request'}), 400
+        try:
+            # Check if model is loaded
+            if model is None:
+                logger.error("Model not loaded!")
+                return jsonify({'error': 'Model not available. Please check server logs.'}), 500
+            
+            # Validate that a file was actually uploaded
+            if 'file' not in request.files:
+                logger.warning("No file part in request")
+                return jsonify({'error': 'No file part in the request'}), 400
 
-        f = request.files['file']
+            f = request.files['file']
 
-        # Some browsers submit an empty part without a filename
-        if f.filename is None or f.filename.strip() == '':
-            return jsonify({'error': 'No file selected for uploading'}), 400
+            # Some browsers submit an empty part without a filename
+            if f.filename is None or f.filename.strip() == '':
+                logger.warning("Empty filename in request")
+                return jsonify({'error': 'No file selected for uploading'}), 400
 
-        basepath = os.path.dirname(__file__)
-        # Ensure uploads directory exists
-        uploads_dir = os.path.join(basepath, 'uploads')
-        if not os.path.exists(uploads_dir):
-            os.makedirs(uploads_dir)
+            logger.info(f"Processing file: {f.filename}")
+            
+            basepath = os.path.dirname(__file__)
+            # Ensure uploads directory exists
+            uploads_dir = os.path.join(basepath, 'uploads')
+            if not os.path.exists(uploads_dir):
+                os.makedirs(uploads_dir)
+                logger.info(f"Created uploads directory: {uploads_dir}")
 
-        # Ensure we always have a valid filename
-        filename = secure_filename(f.filename)
-        if filename == '':
-            # Fallback filename if secure_filename removes everything
-            import time
-            filename = f"upload_{int(time.time())}.png"
+            # Ensure we always have a valid filename
+            filename = secure_filename(f.filename)
+            if filename == '':
+                # Fallback filename if secure_filename removes everything
+                import time
+                filename = f"upload_{int(time.time())}.png"
+                logger.info(f"Using fallback filename: {filename}")
 
-        file_path = os.path.join(uploads_dir, filename)
-        f.save(file_path)
+            file_path = os.path.join(uploads_dir, filename)
+            f.save(file_path)
+            logger.info(f"File saved to: {file_path}")
 
-        preds, probability = model_predict(file_path, model)
-        result = {
-            'prediction': preds,
-            'confidence': float(probability)
-        }
-        return jsonify(result)
+            logger.info("Starting prediction...")
+            preds, probability = model_predict(file_path, model)
+            logger.info(f"Prediction complete: {preds} (confidence: {probability:.2f})")
+            
+            result = {
+                'prediction': preds,
+                'confidence': float(probability)
+            }
+            return jsonify(result)
+            
+        except Exception as e:
+            logger.error(f"Error in /predict: {str(e)}", exc_info=True)
+            return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+    
     return jsonify({'error': 'Invalid request method'}), 405
 
 
