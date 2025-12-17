@@ -22,15 +22,33 @@ app = Flask(__name__)
 
 MODEL_PATH = 'model.h5'
 
-# Load model with error handling
+# Load model with error handling and memory optimization
 try:
     logger.info(f"Loading model from {MODEL_PATH}...")
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(f"Model file {MODEL_PATH} not found!")
+    
+    # Set TensorFlow to use minimal memory growth (CPU only on Render)
+    try:
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logger.info("GPU memory growth enabled")
+        else:
+            logger.info("No GPU detected, using CPU")
+    except RuntimeError as e:
+        logger.warning(f"GPU memory growth setting failed: {e}")
+    
     model = load_model(MODEL_PATH)
     logger.info("Model loaded successfully!")
+    
+    # Compile model to ensure it's ready (but don't train)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    logger.info("Model compiled and ready for inference")
+    
 except Exception as e:
-    logger.error(f"Failed to load model: {str(e)}")
+    logger.error(f"Failed to load model: {str(e)}", exc_info=True)
     model = None
 
 def grayscale(img):
@@ -91,20 +109,38 @@ def getClassName(classNo):
 
 
 def model_predict(img_path, model):
-    print(img_path)
-    img = image.load_img(img_path, target_size=(224, 224))
-    img = np.asarray(img)
-    img = cv2.resize(img, (32, 32))
-    img = preprocessing(img)
-    # Removed cv2.imshow() as it causes issues in web app context
-    img = img.reshape(1, 32, 32, 1)
-    # PREDICT IMAGE
-    predictions = model.predict(img, verbose=0)
-    # Use np.argmax instead of deprecated predict_classes()
-    classIndex = np.argmax(predictions, axis=-1)[0]
-    probabilityValue = np.amax(predictions)
-    preds = getClassName(classIndex)
-    return preds, probabilityValue
+    """
+    Optimized prediction function with memory-efficient processing
+    """
+    logger.info(f"Loading image from: {img_path}")
+    
+    try:
+        # Load and preprocess image more efficiently
+        img = cv2.imread(img_path)
+        if img is None:
+            raise ValueError(f"Could not load image from {img_path}")
+        
+        # Resize directly to 32x32 (skip the 224x224 step)
+        img = cv2.resize(img, (32, 32))
+        img = preprocessing(img)
+        img = img.reshape(1, 32, 32, 1)
+        
+        logger.info("Running model prediction...")
+        # Use predict_on_batch for single image (more efficient than predict)
+        # This avoids overhead of batch processing for a single image
+        predictions = model.predict_on_batch(img)
+        
+        # Extract results
+        classIndex = np.argmax(predictions, axis=-1)[0]
+        probabilityValue = np.amax(predictions)
+        preds = getClassName(classIndex)
+        
+        logger.info(f"Prediction result: class={classIndex}, confidence={probabilityValue:.4f}")
+        return preds, probabilityValue
+        
+    except Exception as e:
+        logger.error(f"Error in model_predict: {str(e)}", exc_info=True)
+        raise
 
 
 @app.route('/', methods=['GET'])
