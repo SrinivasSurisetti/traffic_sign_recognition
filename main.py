@@ -95,21 +95,39 @@ y_test = to_categorical(y_test,noOfClasses)
 
 
 def myModel():
-    model= Sequential()
-    model.add((Conv2D(60,(5,5),input_shape=(imageDimesions[0],imageDimesions[1],1),activation='relu')))  # ADDING MORE CONVOLUTION LAYERS = LESS FEATURES BUT CAN CAUSE ACCURACY TO INCREASE
-    model.add((Conv2D(60, (5,5), activation='relu')))
-    model.add(MaxPooling2D(pool_size=(2,2)))
- 
-    model.add((Conv2D(30, (3,3),activation='relu')))
-    model.add((Conv2D(30, (3,3), activation='relu')))
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    model.add(Dropout(0.5))
- 
+    """
+    A lighter CNN architecture designed to reduce parameter count and memory usage
+    so it can run more easily on low‑resource servers (e.g. free tiers).
+    """
+    model = Sequential()
+
+    # First conv block: small number of filters
+    model.add(
+        Conv2D(
+            16,
+            (3, 3),
+            activation="relu",
+            input_shape=(imageDimesions[0], imageDimesions[1], 1),
+        )
+    )
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+
+    # Second conv block
+    model.add(Conv2D(32, (3, 3), activation="relu"))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(0.25))
+
+    # Classifier
     model.add(Flatten())
-    model.add(Dense(500,activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(noOfClasses,activation='softmax')) 
-    model.compile(Adam(learning_rate=0.001),loss='categorical_crossentropy',metrics=['accuracy'])
+    model.add(Dense(64, activation="relu"))
+    model.add(Dropout(0.25))
+    model.add(Dense(noOfClasses, activation="softmax"))
+
+    model.compile(
+        Adam(learning_rate=0.001),
+        loss="categorical_crossentropy",
+        metrics=["accuracy"],
+    )
     return model
  
 model = myModel()
