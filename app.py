@@ -125,4 +125,6 @@ def upload():
 
 
 if __name__ == '__main__':
-    app.run(port=5001,debug=True)
+    # Get port from environment variable (for Render/Heroku) or use default
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=False)
